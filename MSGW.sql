@@ -1,4 +1,4 @@
----------------------------------------------Gateway Facilities---------------------------------------------------------
+---------------------------------------------Gateway Facilities excluding AL and FL-------------------------------------
 --------------------------------------Gateway Facilities::Aggregate Count-----------------------------------------------
 select count(distinct hbr.facility_identifier)
 from hbi_analytics.request_metrics as hbr
@@ -11,7 +11,7 @@ where hbr.request_successful = 't'
     and hbr.originating_state not in ('AL','FL')
 
 
-----------------------------Gateway Facilities:: count by Zip code------------------------------------------------------
+----------------------------Gateway Facilities:: count by Zip code--excluding AL and FL--------------------------------
 select originating_state, zip as zipcode, count(distinct hbr.facility_identifier)
 from hbi_analytics.request_metrics as hbr
 join gateway.licensees as gwl on gwl.id = hbr.licensee_id
@@ -23,7 +23,7 @@ where hbr.request_successful = 't'
 group by 1,2
 
 
-------------------------Gateway Facilities::monthly facility count trend------------------------------------------------
+------------------------Gateway Facilities::monthly facility count trend-excluding AL and FL----------------------------
 select originating_state as state,TO_CHAR (hbr.created_at, 'YYYY-MM') as Date,
        count(distinct hbr.facility_identifier)
 from hbi_analytics.request_metrics as hbr
@@ -38,7 +38,7 @@ group by 1,2
 order by Date desc;
 
 
--------------------------------Gateway Facilities::Aggregate Count from and to state -----------------------------------
+-------------------------------Gateway Facilities::Aggregate Count from and to state excluding AL and FL----------------
 ----Aggregate:: Gateway requests from requesting state(from State) and disclosures from disclosing state (to States)----
 
 with a as
@@ -89,7 +89,7 @@ from(
 group by 1, 2
 order by 1, 2;
 
---------------------------------does the state allow gateway------------------------------------------------
+--------------------------------does the state allow gateway- excluding AL and FL-----------------------------------------------
 ---Number of States allowing Gateway request_status:new_licensee 0, pending 1, granted 2, denied 3, auto_approved 4]
 
 SELECT
@@ -107,7 +107,7 @@ and request_destinations.request_name not in ('AL', 'FL')
 
 
 
---------------------------Gateway::Aggregate Count>> State using PMP Gateway-------------------------------------------
+--------------------------Gateway::Aggregate Count>> State using PMP Gateway excluding AL and FL-------------------------------------------
 ---Number of States allowing Gateway request_status:new_licensee 0, pending 1, granted 2, denied 3, auto_approved 4]*/
 SELECT
     COUNT (DISTINCT request_destinations.request_name)
@@ -119,7 +119,7 @@ WHERE
     licensee_request_destinations.request_status = 2
 and request_destinations.request_name not in ('AL', 'FL')
 
----------------------Gateway Facilities::Facilities with PMP Gateway (same as 1)---------------------------------------------
+---------------------Gateway Facilities::Facilities with PMP Gateway (same as 1) excluding AL and FL---------------------------------------------
 select count(distinct hbr.facility_identifier)
 from hbi_analytics.request_metrics as hbr
 --join gateway.licensees as gwl on gwl.id = hbr.licensee_id
@@ -141,10 +141,11 @@ select case when hbr.requester_role ~ 'Pharmacist' then 'Pharmacists'
     --and gwl.name !~ 'Appriss'
     and hbr.created_at::date >= DATEADD(MONTH, -1, date_trunc('month', current_date))  ---using one month
     and hbr.created_at::date < date_trunc('month', current_date)
+    and hbr.originating_state not in ('AL','FL')
     group by 1;
 
 --------------------------Gateway::Aggregate Count >>  Patient Encounters Per MONTH------------------------------------
---------------------------------Change wordings on Website to read last month-----------------------------
+--------------------------------excluding AL and FL-----------------------------
 SELECT
     TO_CHAR (hbr.created_at, 'YYYY-MM'),
     COUNT (hbr.id)
@@ -158,5 +159,49 @@ SELECT
    and hbr.created_at::date >= DATEADD(MONTH, -1, date_trunc('month', current_date))  ---using one month
     and hbr.created_at::date < date_trunc('month', current_date)
     AND hbr.request_successful = true
+    and hbr.originating_state not in ('AL','FL')
     GROUP BY 1
     ORDER BY 1;
+
+
+---------------------------------------------Requests and Disclosures---------------------------------------------------
+---------Values for PMP Interconnect total transactions for each month excluding AL and FL------------------------------
+
+SELECT
+    COUNT (DISTINCT search_request_metrics.search_request_id) as requests,
+    COUNT (search_request_metrics.disclosure_request_id) as disclosures,
+    requests + disclosures as ineterconnect_total_trx
+FROM
+    pmpi.search_request_metrics
+WHERE
+    search_request_metrics.searching_pmp_id not in  (255,126,257) --Appriss Test PMP,Alabama,florida
+and search_request_metrics.search_request_received_at::date >= DATEADD(MONTH, -1, date_trunc('month', current_date))
+and search_request_metrics.search_request_received_at::date < date_trunc('month', current_date)
+AND search_request_metrics.disclosure_successful = TRUE
+
+;
+
+---------------------PDMPs Sharing on PMP Interconnect excluding AL and FL----------------------------------------------
+
+SELECT
+   COUNT(DISTINCT CASE WHEN pmps.display_name ~* 'Maryland' THEN 'Maryland' ELSE pmps.display_name END)
+FROM
+    pmpi.pmps
+WHERE
+    pmps.id NOT IN (45, --Regenstrief
+                    46, --DrFirst
+                    47, --Emdeon HIE
+                    86, --C4Uh (HIE)
+                    88, --Via Christi Health
+                    90, --Narxcheck
+                    126, --Alabama
+                    196, --NDHIN
+                    198, --MHIN
+                    199, --Gateway
+                    237, --LACIE
+                    255, --Appriss Test PMP
+                    257, --Florida
+                    390) --Gateway FedRamp
+AND pmps.active = TRUE;
+
+
